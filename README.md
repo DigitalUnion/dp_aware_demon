@@ -49,7 +49,6 @@
 	e.Use(aware.Sentinel())
 	//gin 使用prometheus监控 包含限流统计
 	e.GET("/awarent", awarent.PromHandler)
-	e.GET("/awarent", awarent.PromHandler)
 	e.GET("/q", handlers.GetDDV)
 	srv := &http.Server{
 		Addr:    "0.0.0.0:8080",
