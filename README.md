@@ -7,12 +7,13 @@
 
 
 ### init awarent
-    ServiceName: 服务名字
-    Port： 服务端口
-    Nacos： nacos配置 包括 IP，Port
-    Group： 组，服务所在组 例如 DDV_TEST,DDV_DEV,DDV_PROD
-    ConfigID: nasco 配置 dataid
-    RuleID： IP Filter， 流量控制规则ID
+ ServiceName: 服务名字
+ Port： 服务端口
+ Nacos： nacos配置 包括 IP，Port
+ Group： 组，服务所在组 例如 DDV_TEST,DDV_DEV,DDV_PROD
+ ConfigID: nasco 配置 dataid
+ RuleID： IP Filter， 流量控制规则ID
+ 
 ```
 	aware, err := awarent.InitAwarent(awarent.Config{
 		ServiceName: "ddv",
