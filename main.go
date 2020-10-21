@@ -1,19 +1,31 @@
-# du_aware_demon
- 1. flowcontrol 
- 2. ipfilter 
- 3. service register/deregister
- 4. configure dynamic get/upgrade
- 5. dynamic upgrade flowcontrol/ipfilter rule
+package main
 
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
-###init awarent
-    ServiceName: 服务名字
-    Port： 服务端口
-    Nacos： nacos配置 包括 IP，Port
-    Group： 组，服务所在组 例如 DDV_TEST,DDV_DEV,DDV_PROD
-    ConfigID: nasco 配置 dataid
-    RuleID： IP Filter， 流量控制规则ID
-```
+	"github.com/DigitalUnion/dp_aware_demon/awarent"
+	"github.com/DigitalUnion/dp_aware_demon/handlers"
+
+	"github.com/gin-gonic/gin"
+)
+
+var (
+	cfgFile string // 配置文件
+)
+
+func main() {
+
+	//初始化 awarent  服务注册，加载限流规则和IPFilter规则，服务监听，动态规则更新
+	//ServiceName: 服务名字
+	//Port: 运行端口
+	//Nacos: nacos ip和端口
+	//Group: 组
+	//ConfigID: 配置文件的dataid
+	//RuleID:   规则的dataid
 	aware, err := awarent.InitAwarent(awarent.Config{
 		ServiceName: "ddv",
 		Port:        8080,
@@ -25,21 +37,23 @@
 		// ConfigID: "DDV_CONFIG",
 		RuleID: "DDV_RULES",
 	})
-```
+	if err != nil {
+		panic("init awarent client error")
+	}
 
-
-
-###gin 使用 awarent
-
-```
-    e := gin.New()
+	e := gin.New()
 	e.Use(gin.Recovery())
 	//gin 使用 IP过滤middleware
 	e.Use(aware.IPFilter())
 	//gin 使用 限流middleware
 	e.Use(aware.Sentinel())
+	e.GET("/", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
+	e.HEAD("/", func(c *gin.Context) {
+		c.AbortWithStatus(200)
+	})
 	//gin 使用prometheus监控 包含限流统计
-	e.GET("/awarent", awarent.PromHandler)
 	e.GET("/awarent", awarent.PromHandler)
 	e.GET("/q", handlers.GetDDV)
 	srv := &http.Server{
@@ -55,7 +69,6 @@
 	quit := make(chan os.Signal)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	<-quit
-	//服务注销
+	//
 	aware.Deregister()
-```
-
+}
