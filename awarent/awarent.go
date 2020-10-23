@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DigitalUnion/dp_aware_demon/balancer"
 	sentinel "github.com/alibaba/sentinel-golang/api"
 	"github.com/alibaba/sentinel-golang/core/config"
 	"github.com/alibaba/sentinel-golang/core/flow"
@@ -33,6 +34,9 @@ type Awarenter interface {
 	GetConfig(configID string) (string, error)
 	//ConfigOnChange listen on config change with callback function
 	ConfigOnChange(configID string, callback ConfigChangeCallback) error
+
+	ServiceClient(serviceName string, group string) (http.Client, error)
+	GetService(serviceName string, group string) (model.Service, error)
 }
 
 //ConfigChangeCallback callback function when config changed
@@ -181,6 +185,38 @@ func (a *Awarent) Register() (bool, error) {
 	}
 
 	return a.nameClient.RegisterInstance(regParam)
+}
+
+//GetService get single random service
+func (a *Awarent) GetService(serviceName string, group string) (model.Service, error) {
+	serviceParam := vo.GetServiceParam{
+		ServiceName: serviceName,
+		GroupName:   group,
+	}
+	return a.nameClient.GetService(serviceParam)
+}
+
+//ServiceClient return a httpclient for service. the httpclient auto balancer with roundrobin
+func (a *Awarent) ServiceClient(serviceName string, group string) (*http.Client, error) {
+	service, err := a.GetService(serviceName, group)
+	if err != nil {
+		return nil, err
+	}
+	instances := service.Hosts
+	var urls []string
+	if len(instances) > 0 {
+		for _, instance := range instances {
+			url := fmt.Sprintf("http://%s:%d", instance.Ip, instance.Port)
+			urls = append(urls, url)
+		}
+	}
+	bl, err := balancer.NewRoundrobinFromURL(urls...)
+	if err != nil {
+		fmt.Printf("new balancer error:%v\n", err)
+		return nil, err
+	}
+	client := balancer.NewClient(bl)
+	return client, nil
 }
 
 //Subscribe subscribe service change

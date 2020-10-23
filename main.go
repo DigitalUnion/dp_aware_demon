@@ -9,6 +9,7 @@ import (
 
 	"github.com/DigitalUnion/dp_aware_demon/awarent"
 	"github.com/DigitalUnion/dp_aware_demon/handlers"
+	"github.com/nacos-group/nacos-sdk-go/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,7 +41,16 @@ func main() {
 	if err != nil {
 		panic("init awarent client error")
 	}
-
+	service, err := aware.GetService("ddv", "DDV_TEST")
+	if err != nil {
+		fmt.Printf("get service errror:%v", err)
+	}
+	fmt.Printf("service:%s", util.ToJsonString(service))
+	content, _ := aware.GetConfig("DDV_CONFIG")
+	fmt.Printf("content:%s", content)
+	aware.ConfigOnChange("DDV_CONFIG", func(data string) {
+		fmt.Printf("config updated:%s\n", data)
+	})
 	e := gin.New()
 	e.Use(gin.Recovery())
 	//gin 使用 IP过滤middleware

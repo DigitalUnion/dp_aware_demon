@@ -4,6 +4,7 @@
  3. service register/deregister
  4. configure dynamic get/upgrade
  5. dynamic upgrade flowcontrol/ipfilter rule
+ 6.  service client side load balance
 
 
 ### init awarent
