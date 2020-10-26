@@ -33,6 +33,8 @@ type Filter struct {
 	authorizedIPs  map[string][]string
 }
 
+var ipfilter *Filter
+
 //New new ipfilter
 func New(opts FilterOptions) *Filter {
 
@@ -45,6 +47,7 @@ func New(opts FilterOptions) *Filter {
 	}
 	f.urlParam = opts.URLParam
 	f.urlPath = opts.URLPath
+
 	for _, ip := range opts.AllowedIPs {
 		f.allowIP(ip)
 	}
@@ -58,6 +61,44 @@ func New(opts FilterOptions) *Filter {
 
 	}
 	return f
+}
+
+func updateIPFilter(opts FilterOptions) {
+	if ipfilter == nil {
+		ipfilter = &Filter{
+			opts:           opts,
+			mut:            sync.RWMutex{},
+			allowedIPs:     map[string]bool{},
+			blockedIPs:     map[string]bool{},
+			authorizedIPs:  map[string][]string{},
+			defaultAllowed: !opts.BlockByDefault,
+		}
+	}
+
+	ipfilter.urlParam = opts.URLParam
+	ipfilter.urlPath = opts.URLPath
+	for k := range ipfilter.allowedIPs {
+		delete(ipfilter.allowedIPs, k)
+	}
+	for _, ip := range opts.AllowedIPs {
+		ipfilter.allowIP(ip)
+	}
+	for k := range ipfilter.blockedIPs {
+		delete(ipfilter.blockedIPs, k)
+	}
+	for _, ip := range opts.BlockedIPs {
+		ipfilter.blockIP(ip)
+	}
+
+	for k := range ipfilter.authorizedIPs {
+		delete(ipfilter.authorizedIPs, k)
+	}
+	for _, authrozied := range opts.AuthorizedIPs {
+		for _, ip := range authrozied.IPS {
+			ipfilter.authorizeIP(ip, authrozied.Resource)
+		}
+
+	}
 }
 
 //allowIP  settting allow ip address

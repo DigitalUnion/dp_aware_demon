@@ -3,6 +3,7 @@ package awarent
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -138,38 +139,47 @@ func InitAwarent(entity Config) (*Awarent, error) {
 	}
 	awarent.configClient = configClient
 	sentinel.InitWithConfig(sentinelConfig)
-	rc, err := awarent.GetConfig(awarent.ruleID)
+	if len(awarent.ruleID) > 0 {
+		awarent.loadRule(awarent.ruleID, true)
+	}
+	awarent.Register()
+	awarent.Subscribe()
+	return awarent, nil
+}
+
+func (a *Awarent) loadRule(ruleID string, listenOnChange bool) error {
+	rc, err := a.GetConfig(ruleID)
 	if err != nil {
-		fmt.Printf("get flow control rule error:%v\n", err)
-		return nil, err
+		log.Printf("get flow control rule error:%v\n", err)
+		return err
 	}
 	yamlDecoder := yaml.NewDecoder(strings.NewReader(rc))
 	var rule Rule
 	if err = yamlDecoder.Decode(&rule); err != nil {
-		fmt.Printf("decode yaml error:%v\n", err)
-		return nil, err
+		log.Printf("decode rule error:%v\n", err)
+		return err
 	}
-	awarent.rule = rule
-	fmt.Printf("load flow control rules:%s\n", util.ToJsonString(rule.FlowControlRules))
-	awarent.LoadRules(rule.FlowControlRules...)
-	awarent.Register()
-	awarent.Subscribe()
-	ruleChangedCallback := func(data string) {
-		yamlDecoder := yaml.NewDecoder(strings.NewReader(data))
-		var rule Rule
-		if err := yamlDecoder.Decode(&rule); err != nil {
-			fmt.Printf("decode yaml error:%v\n", err)
-		}
-		awarent.rule = rule
+	log.Printf("load rules: %s\n", rc)
+	a.loadFlowControlRules(rule.FlowControlRules...)
+	if listenOnChange {
+		ruleChangedCallback := func(data string) {
+			log.Printf("ruleID:%s changed", ruleID)
+			yamlDecoder := yaml.NewDecoder(strings.NewReader(data))
+			var rule Rule
+			if err := yamlDecoder.Decode(&rule); err != nil {
+				log.Printf("decode yaml error:%v\n", err)
+			}
+			log.Printf("load rules:%s\n", data)
+			a.rule = rule
 
-		//reload rules
-		awarent.LoadRules(rule.FlowControlRules...)
-		//reload ip filter rules
-		newIPFilter := New(rule.IPFilterRules)
-		ipfilter = newIPFilter
+			//reload rules
+			a.loadFlowControlRules(rule.FlowControlRules...)
+			//update ip filter rules
+			updateIPFilter(rule.IPFilterRules)
+		}
+		a.ConfigOnChange(ruleID, ruleChangedCallback)
 	}
-	awarent.ConfigOnChange(awarent.ruleID, ruleChangedCallback)
-	return awarent, nil
+	return nil
 }
 
 //Register register service
@@ -219,20 +229,20 @@ func (a *Awarent) ServiceClient(serviceName string, group string) (*http.Client,
 	return client, nil
 }
 
-//Subscribe subscribe service change
+//Subscribe subscribe service change, do flow control re-balance flow control
 func (a *Awarent) Subscribe() error {
 	subCallback := func(services []model.SubscribeService, err error) {
 		if len(services) > 0 {
 			actives := float64(len(services))
-			fmt.Printf("subscribe callback return services:%s \n\n", util.ToJsonString(services))
+			log.Printf("subscribe callback return services:%s \n\n", util.ToJsonString(services))
 			var newFlowControlRules []FlowControlOption
 			for _, fr := range a.rule.FlowControlRules {
 				newFlowRule := fr
 				newFlowRule.Threshold = fr.Threshold / actives
 				newFlowControlRules = append(newFlowControlRules, newFlowRule)
 			}
-			fmt.Printf("balanced flow control:%s \n", util.ToJsonString(newFlowControlRules))
-			a.LoadRules(newFlowControlRules...)
+			log.Printf("balanced flow control:%s \n", util.ToJsonString(newFlowControlRules))
+			a.loadFlowControlRules(newFlowControlRules...)
 		}
 	}
 	subParam := &vo.SubscribeParam{
@@ -277,8 +287,8 @@ func (a *Awarent) ConfigOnChange(configID string, callback func(data string)) er
 	return a.configClient.ListenConfig(vo)
 }
 
-//LoadRules load flow control rules
-func (a *Awarent) LoadRules(rules ...FlowControlOption) (bool, error) {
+//loadFlowControlRules load flow control rules
+func (a *Awarent) loadFlowControlRules(rules ...FlowControlOption) (bool, error) {
 	var sentinelRules []*flow.Rule
 	for _, ruleItem := range rules {
 		sentinelRule := &flow.Rule{
@@ -323,8 +333,6 @@ func (a *Awarent) Metrics() gin.HandlerFunc {
 		c.String(http.StatusOK, b.String())
 	}
 }
-
-var ipfilter *Filter
 
 //IPFilter ip filter with options
 func (a *Awarent) IPFilter() gin.HandlerFunc {
