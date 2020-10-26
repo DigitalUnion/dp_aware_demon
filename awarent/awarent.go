@@ -159,6 +159,7 @@ func (a *Awarent) loadRule(ruleID string, listenOnChange bool) error {
 		log.Printf("decode rule error:%v\n", err)
 		return err
 	}
+	a.rule = rule
 	log.Printf("load rules: %s\n", rc)
 	a.loadFlowControlRules(rule.FlowControlRules...)
 	if listenOnChange {
