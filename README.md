@@ -68,3 +68,20 @@
 	aware.Deregister()
 ```
 
+### nacos docker-compose 安装
+
+* Clone 项目 并且进入项目根目录
+
+  ```powershell
+  git clone https://github.com/paderlol/nacos-docker.git
+  cd nacos-docker
+  ```
+
+
+* 单机mysql8 
+
+  ```powershell
+  docker-compose -f example/standalone-mysql-8.yaml up -d 
+  ```
+  
+
