@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/DigitalUnion/dp_aware_demon/awarent"
-	"github.com/DigitalUnion/dp_aware_demon/handlers"
 	"github.com/nacos-group/nacos-sdk-go/util"
 
 	"github.com/gin-gonic/gin"
@@ -65,7 +67,13 @@ func main() {
 	})
 	//gin 使用prometheus监控 包含限流统计
 	e.GET("/awarent", awarent.PromHandler)
-	e.GET("/q", handlers.GetDDV)
+	e.GET("/q", func(c *gin.Context) {
+		r := rand.Intn(10)
+		time.Sleep(time.Duration(r) * time.Millisecond)
+		cid := c.Query("cid")
+		log.Printf("ip:%s,cid=%s", cid, c.ClientIP())
+		c.String(200, "%s", time.Now().Format(time.RFC3339))
+	})
 	srv := &http.Server{
 		Addr:    "0.0.0.0:8080",
 		Handler: e,
