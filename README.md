@@ -37,8 +37,7 @@
 			Port: 8848,
 		},
 		Group: "DDV_TEST",
-		// ConfigID: "DDV_CONFIG",
-		RuleID: "DDV_RULES",
+		RuleID: "DDV_RULES",// 可选，如果RuleID为空 则 限流和IP过滤功能将不可用
 	})
 ```
 
