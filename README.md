@@ -7,6 +7,11 @@
  6.  service client side load balance
 
 
+# 架构
+![architecture](./dp_aware_demon.png)
+
+
+
 ### init awarent
  
 
@@ -50,6 +55,13 @@
 	e.Use(aware.Sentinel())
 	//gin 使用prometheus监控 包含限流统计
 	e.GET("/awarent", awarent.PromHandler)
+	//获取配置  
+	content, _ := aware.GetConfig("DDV_CONFIG")
+	fmt.Printf("content:%s", content)
+	//监听配置更新 动态配置
+	aware.ConfigOnChange("DDV_CONFIG", func(data string) {
+		fmt.Printf("config updated:%s\n", data)
+	})
 	e.GET("/q", handlers.GetDDV)
 	srv := &http.Server{
 		Addr:    "0.0.0.0:8080",
@@ -66,6 +78,12 @@
 	<-quit
 	//服务注销
 	aware.Deregister()
+```
+
+
+###动态更新配置
+```
+
 ```
 
 ### nacos docker-compose 安装
