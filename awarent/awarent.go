@@ -13,7 +13,7 @@ import (
 	sentinel "github.com/alibaba/sentinel-golang/api"
 	"github.com/alibaba/sentinel-golang/core/config"
 	"github.com/alibaba/sentinel-golang/core/flow"
-	metric "github.com/alibaba/sentinel-golang/core/log/metric"
+	"github.com/alibaba/sentinel-golang/core/log/metric"
 	"github.com/gin-gonic/gin"
 	"github.com/nacos-group/nacos-sdk-go/clients"
 	"github.com/nacos-group/nacos-sdk-go/clients/config_client"
@@ -38,6 +38,8 @@ type Awarenter interface {
 
 	ServiceClient(serviceName string, group string) (http.Client, error)
 	GetService(serviceName string, group string) (model.Service, error)
+
+	PublishConfig(configID, content string) (bool, error)
 }
 
 //ConfigChangeCallback callback function when config changed
@@ -269,6 +271,15 @@ func (a *Awarent) GetConfig(configID string) (string, error) {
 	return a.configClient.GetConfig(vo.ConfigParam{
 		DataId: configID,
 		Group:  a.group,
+	})
+}
+
+//Publish the configuration to the nacos with config dataid
+func (a *Awarent) PublishConfig(configID, content string) (bool, error) {
+	return a.configClient.PublishConfig(vo.ConfigParam{
+		DataId:  configID,
+		Group:   a.group,
+		Content: content,
 	})
 }
 
