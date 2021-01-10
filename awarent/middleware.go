@@ -16,6 +16,7 @@ type (
 	//Option func with options param
 	Option  func(*options)
 	options struct {
+		paramExtractor  func(*gin.Context) bool
 		resourceExtract func(*gin.Context) string
 		blockFallback   func(*gin.Context)
 	}
@@ -28,6 +29,12 @@ func evaluateOptions(opts []Option) *options {
 	}
 
 	return optCopy
+}
+
+func WithParamExtractor(fn func(*gin.Context) bool) Option {
+	return func(opts *options) {
+		opts.paramExtractor = fn
+	}
 }
 
 // WithResourceExtractor sets the resource extractor of the web requests.
@@ -48,16 +55,16 @@ func WithBlockFallback(fn func(ctx *gin.Context)) Option {
 // Default resource name is {method}:{path}, such as "GET:/api/users/:id"
 // Default block fallback is returning 429 code
 // Define your own behavior by setting options
-func SentinelMiddleware(endPoint string, opts ...Option) gin.HandlerFunc {
+func SentinelMiddleware(opts ...Option) gin.HandlerFunc {
 	options := evaluateOptions(opts)
-	path := endPoint
 	return func(c *gin.Context) {
 
-		if c.Request.URL.Path != path {
-			c.Next()
-			return
+		if options.paramExtractor != nil {
+			if options.paramExtractor(c) {
+				c.Next()
+				return
+			}
 		}
-
 		start := time.Now()
 		resourceName := c.Request.Method + ":" + c.FullPath()
 		if options.resourceExtract != nil {

@@ -339,46 +339,116 @@ func (a *Awarent) Metrics() gin.HandlerFunc {
 func (a *Awarent) IPFilter() gin.HandlerFunc {
 	opts := a.rule.IPFilterRules
 	ipfilter = New(opts)
-	return func(c *gin.Context) {
-		if ipfilter.urlPath == c.Request.URL.Path {
-			param := c.Query(ipfilter.urlParam)
-			blocked := false
-			ip := c.ClientIP()
-			if !ipfilter.Allowed(ip) {
-				blocked = true
-			} else if !ipfilter.Authorized(ip, param) {
-				blocked = true
-			}
-			if blocked {
-				c.AbortWithStatus(http.StatusForbidden)
-				return
-			}
-			c.Next()
-		}
-		c.Next()
+	if ipfilter.urlParam != "" {
+		return defaultIpHandler
+	} else {
+		return customIpHandler
 	}
 }
 
+var defaultIpHandler gin.HandlerFunc = func(c *gin.Context) {
+	if ipfilter.urlPath == c.Request.URL.Path {
+		param := c.Query(ipfilter.urlParam)
+		blocked := false
+		ip := c.ClientIP()
+		if !ipfilter.Allowed(ip) {
+			blocked = true
+		} else if !ipfilter.Authorized(ip, param) {
+			blocked = true
+		}
+		if blocked {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		c.Next()
+	}
+	c.Next()
+}
+
+var customIpHandler gin.HandlerFunc = func(c *gin.Context) {
+	urlPath := c.Request.URL.Path
+	if strings.HasPrefix(urlPath, ipfilter.urlPath) {
+		params := strings.Split(urlPath, "/")
+		var param string
+		if len(params) != 0 {
+			param = params[len(params)-1]
+		}
+		blocked := false
+		ip := c.ClientIP()
+		if !ipfilter.Allowed(ip) {
+			blocked = true
+		} else if !ipfilter.Authorized(ip, param) {
+			blocked = true
+		}
+		if blocked {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		c.Next()
+	}
+	c.Next()
+}
+
+var endpoint, param string
+
 //Sentinel awarent gin use middleware
 func (a *Awarent) Sentinel() gin.HandlerFunc {
-	param := a.rule.ResourceParam
-	endpoint := a.rule.IPFilterRules.URLPath
-	return SentinelMiddleware(
-		// speicify which url path working with sentinel
-		endpoint,
-		// customize resource extractor if required
-		// method_path by default
-		WithResourceExtractor(func(ctx *gin.Context) string {
-			return ctx.Query(param)
-		}),
-		// customize block fallback if required
-		// abort with status 429 by default
-		WithBlockFallback(func(ctx *gin.Context) {
-			ctx.AbortWithStatus(http.StatusTooManyRequests)
-			// ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
-			// 	"err":  "too many request; the quota used up",
-			// 	"code": 10222,
-			// })
-		}),
-	)
+	param = a.rule.ResourceParam
+	endpoint = a.rule.IPFilterRules.URLPath
+	if param == "" {
+		return defaultSentinelMiddleware
+	} else {
+		return customSentinelMiddleware
+	}
 }
+
+var defaultSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
+	// speicify which url path working with sentinel
+	WithParamExtractor(
+		func(ctx *gin.Context) bool {
+			return !strings.HasPrefix(ctx.Request.URL.Path, endpoint)
+		}),
+	//endpoint,
+	// customize resource extractor if required
+	// method_path by default
+	WithResourceExtractor(func(ctx *gin.Context) string {
+		return ctx.Query(param)
+	}),
+	// customize block fallback if required
+	// abort with status 429 by default
+	WithBlockFallback(func(ctx *gin.Context) {
+		ctx.AbortWithStatus(http.StatusTooManyRequests)
+		// ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
+		// 	"err":  "too many request; the quota used up",
+		// 	"code": 10222,
+		// })
+	}),
+)
+
+var customSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
+	// speicify which url path working with sentinel
+	WithParamExtractor(
+		func(ctx *gin.Context) bool {
+			return ctx.Request.URL.Path != endpoint
+		}),
+	//endpoint,
+	// customize resource extractor if required
+	// method_path by default
+	WithResourceExtractor(func(ctx *gin.Context) string {
+		params := strings.Split(ctx.Request.URL.Path, "/")
+		var param string
+		if len(params) != 0 {
+			param = params[len(params)-1]
+		}
+		return param
+	}),
+	// customize block fallback if required
+	// abort with status 429 by default
+	WithBlockFallback(func(ctx *gin.Context) {
+		ctx.AbortWithStatus(http.StatusTooManyRequests)
+		// ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
+		// 	"err":  "too many request; the quota used up",
+		// 	"code": 10222,
+		// })
+	}),
+)

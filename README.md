@@ -11,6 +11,74 @@
 ![architecture](./dp_aware_demon.png)
 
 
+### config.yaml
+- 场景一（id 映射）
+```yaml
+resource-param: cid # cid需要从url参数中获取的需要配置，cid在url路径中直接带的，⚠️不需要配置
+flow-control-rules:
+  - resource: bigdata
+    threshold: 100
+  - resource: test
+    threshold: 50
+  - resource: ads
+    threshold: 1000
+ip-filter-rules:
+  allowed:
+    - 127.0.0.1
+    - localhost
+    - 172.17.130.223
+  blocked:
+    - 10.10.1.21
+    - 192.168.1.24
+  urlPath: /q
+  urlParam: cid # cid需要从url参数中获取的需要配置，cid在url路径中直接带的，⚠️不需要配置
+  blockedDefault: false
+  authorized:
+    - resource: "test"
+      ips:
+        - 127.0.0.1
+        - localhost
+        - 172.17.130.223
+    - resource: "bigdata"
+      ips:
+        - 127.0.0.1
+        - localhost
+        - 172.17.130.223
+```
+- 场景二（设备活跃）
+```yaml
+resource-param:  # cid需要从url参数中获取的需要配置，cid在url路径中直接带的，⚠️不需要配置
+flow-control-rules:
+  - resource: bigdata
+    threshold: 100
+  - resource: test
+    threshold: 50
+  - resource: ads
+    threshold: 1000
+ip-filter-rules:
+  allowed:
+    - 127.0.0.1
+    - localhost
+    - 172.17.130.223
+  blocked:
+    - 10.10.1.21
+    - 192.168.1.24
+  urlPath: /active
+  urlParam:  # cid需要从url参数中获取的需要配置，cid在url路径中直接带的，⚠️不需要配置
+  blockedDefault: false
+  authorized:
+    - resource: "test"
+      ips:
+        - 127.0.0.1
+        - localhost
+        - 172.17.130.223
+    - resource: "bigdata"
+      ips:
+        - 127.0.0.1
+        - localhost
+        - 172.17.130.223
+```
+
 
 ### init awarent
  
