@@ -30,27 +30,27 @@ func main() {
 	//ConfigID: 配置文件的dataid
 	//RuleID:   规则的dataid
 	aware, err := awarent.InitAwarent(awarent.Config{
-		ServiceName: "ddv",
+		ServiceName: "device_active",
 		Port:        8080,
 		Nacos: awarent.Nacos{
-			IP:   "192.168.1.71",
+			IP:   "172.17.130.223",
 			Port: 8848,
 		},
-		Group: "DDV_TEST",
+		Group: "DEFAULT_GROUP",
 		// ConfigID: "DDV_CONFIG",
-		RuleID: "DDV_RULES",
+		RuleID: "DEVICE_ACTIVE_TEST",
 	})
 	if err != nil {
 		panic("init awarent client error")
 	}
-	service, err := aware.GetService("ddv", "DDV_TEST")
+	service, err := aware.GetService("device_active", "DEFAULT_GROUP")
 	if err != nil {
 		fmt.Printf("get service errror:%v", err)
 	}
 	fmt.Printf("service:%s", util.ToJsonString(service))
-	content, _ := aware.GetConfig("DDV_CONFIG")
+	content, _ := aware.GetConfig("DEVICE_ACTIVE_TEST")
 	fmt.Printf("content:%s", content)
-	aware.ConfigOnChange("DDV_CONFIG", func(data string) {
+	aware.ConfigOnChange("DEVICE_ACTIVE_TEST", func(data string) {
 		fmt.Printf("config updated:%s\n", data)
 	})
 	e := gin.New()
@@ -67,7 +67,7 @@ func main() {
 	})
 	//gin 使用prometheus监控 包含限流统计
 	e.GET("/awarent", awarent.PromHandler)
-	e.GET("/q", func(c *gin.Context) {
+	e.GET("/active/applist/and/:user_id", func(c *gin.Context) {
 		r := rand.Intn(10)
 		time.Sleep(time.Duration(r) * time.Millisecond)
 		cid := c.Query("cid")
@@ -87,6 +87,6 @@ func main() {
 	quit := make(chan os.Signal)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	<-quit
-	//
 	aware.Deregister()
+	fmt.Println("quit")
 }

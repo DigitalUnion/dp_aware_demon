@@ -2,14 +2,14 @@ package awarent
 
 import (
 	"fmt"
-	"net/http"
-	"time"
-
 	sentinel "github.com/alibaba/sentinel-golang/api"
 	"github.com/alibaba/sentinel-golang/core/base"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
+	"strings"
+	"time"
 )
 
 type (
@@ -18,6 +18,8 @@ type (
 	options struct {
 		resourceExtract func(*gin.Context) string
 		blockFallback   func(*gin.Context)
+		dayBlockExtract func(*gin.Context) (string, bool)
+		entrySummary    func(ctx *gin.Context, uId string)
 	}
 )
 
@@ -28,6 +30,20 @@ func evaluateOptions(opts []Option) *options {
 	}
 
 	return optCopy
+}
+
+// WithResourceExtractor sets the resource extractor of the web requests.
+func WithDayBlockExtractor(fn func(*gin.Context) (string, bool)) Option {
+	return func(opts *options) {
+		opts.dayBlockExtract = fn
+	}
+}
+
+// WithResourceExtractor sets the resource extractor of the web requests.
+func WithEntrySummary(fn func(*gin.Context, string)) Option {
+	return func(opts *options) {
+		opts.entrySummary = fn
+	}
 }
 
 // WithResourceExtractor sets the resource extractor of the web requests.
@@ -53,7 +69,7 @@ func SentinelMiddleware(endPoint string, opts ...Option) gin.HandlerFunc {
 	path := endPoint
 	return func(c *gin.Context) {
 
-		if c.Request.URL.Path != path {
+		if c.Request.URL.Path != path && !strings.Contains(c.Request.URL.Path, path) {
 			c.Next()
 			return
 		}
@@ -62,6 +78,20 @@ func SentinelMiddleware(endPoint string, opts ...Option) gin.HandlerFunc {
 		resourceName := c.Request.Method + ":" + c.FullPath()
 		if options.resourceExtract != nil {
 			resourceName = options.resourceExtract(c)
+		}
+		var (
+			uId string
+			ok  bool
+		)
+		if uId, ok = options.dayBlockExtract(c); ok {
+			c.AbortWithStatus(http.StatusTooManyRequests)
+			status := fmt.Sprintf("%d", c.Writer.Status())
+			endpoint := c.Request.URL.Path
+			lvs := []string{status, endpoint, resourceName}
+			blockCount.WithLabelValues(lvs...).Inc()
+			reqCount.WithLabelValues(lvs...).Inc()
+			reqDuration.WithLabelValues(lvs...).Observe(time.Since(start).Seconds())
+			return
 		}
 
 		entry, err := sentinel.Entry(
@@ -86,6 +116,7 @@ func SentinelMiddleware(endPoint string, opts ...Option) gin.HandlerFunc {
 		}
 		defer entry.Exit()
 		c.Next()
+		options.entrySummary(c, uId)
 		status := fmt.Sprintf("%d", c.Writer.Status())
 		endpoint := c.Request.URL.Path
 		lvs := []string{status, endpoint, resourceName}

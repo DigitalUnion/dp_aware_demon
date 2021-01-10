@@ -11,6 +11,49 @@
 ![architecture](./dp_aware_demon.png)
 
 
+### config.yaml
+
+```yaml
+resource-param: user_id
+flow-control-rules:
+  - resource: /active/applist/and/1
+    threshold: 100
+  - resource: /active/apps/and/1
+    threshold: 50
+  - resource: /active/devices/and/1
+    threshold: 1000
+ip-filter-rules:
+  allowed:
+    - 127.0.0.1
+    - localhost
+    - 172.17.130.223
+  blocked:
+    - 10.10.1.21
+    - 192.168.1.24
+  urlPath: /active
+  urlParam: ":user_id"
+  blockedDefault: false
+  authorized:
+    - resource: "user_id:1"
+      ips:
+        - 127.0.0.1
+        - localhost
+        - 172.17.130.223
+    - resource: "user_id:2"
+      ips:
+        - 127.0.0.1
+        - localhost
+        - 172.17.130.223
+
+day-flow-rules:
+  - resource: 1
+    threshold: 100
+  - resource: 2
+    threshold: 1000
+
+```
+
+
 
 ### init awarent
  

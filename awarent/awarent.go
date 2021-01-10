@@ -13,7 +13,7 @@ import (
 	sentinel "github.com/alibaba/sentinel-golang/api"
 	"github.com/alibaba/sentinel-golang/core/config"
 	"github.com/alibaba/sentinel-golang/core/flow"
-	metric "github.com/alibaba/sentinel-golang/core/log/metric"
+	"github.com/alibaba/sentinel-golang/core/log/metric"
 	"github.com/gin-gonic/gin"
 	"github.com/nacos-group/nacos-sdk-go/clients"
 	"github.com/nacos-group/nacos-sdk-go/clients/config_client"
@@ -72,6 +72,7 @@ type Awarent struct {
 	nameClient   naming_client.INamingClient
 	configClient config_client.IConfigClient
 	rule         Rule
+	count        *traffic
 }
 
 //FlowControlOption option for flow control  resource for specify resource need to be controled, threshold, means every second passed request by flowcontrol. here means QPS
@@ -85,6 +86,7 @@ type Rule struct {
 	ResourceParam    string              `yaml:"resource-param"`
 	FlowControlRules []FlowControlOption `yaml:"flow-control-rules"`
 	IPFilterRules    FilterOptions       `yaml:"ip-filter-rules"`
+	DayFlowRules     []FlowControlOption `yaml:"day-flow-rules"`
 }
 
 //InitAwarent init awarent module
@@ -100,6 +102,7 @@ func InitAwarent(entity Config) (*Awarent, error) {
 		nacosPort:   entity.Nacos.Port,
 		configID:    entity.ConfigID,
 		ruleID:      entity.RuleID,
+		count:       newTraffic(entity.ServiceName),
 	}
 
 	sentinelConfig := config.NewDefaultConfig()
@@ -119,7 +122,7 @@ func InitAwarent(entity Config) (*Awarent, error) {
 		CacheDir:            sentinelConfig.Sentinel.Log.Dir,
 		RotateTime:          "1h",
 		MaxAge:              3,
-		LogLevel:            "debug",
+		LogLevel:            "info",
 	}
 	nameClient, err := clients.CreateNamingClient(map[string]interface{}{
 		"serverConfigs": sc,
@@ -192,6 +195,7 @@ func (a *Awarent) Register() (bool, error) {
 		Weight:      10,
 		Healthy:     true,
 		Enable:      true,
+		Ephemeral:   true,
 		GroupName:   a.group,
 	}
 
@@ -260,6 +264,7 @@ func (a *Awarent) Deregister() (bool, error) {
 		Ip:        util.LocalIP(),
 		Port:      a.port,
 		GroupName: a.group,
+		Ephemeral: true,
 	}
 	return a.nameClient.DeregisterInstance(vo)
 }
@@ -341,7 +346,13 @@ func (a *Awarent) IPFilter() gin.HandlerFunc {
 	ipfilter = New(opts)
 	return func(c *gin.Context) {
 		if ipfilter.urlPath == c.Request.URL.Path {
-			param := c.Query(ipfilter.urlParam)
+			var param string
+			if strings.Contains(ipfilter.urlParam, ":") {
+				PathParam := strings.Trim(ipfilter.urlParam, ":")
+				param = fmt.Sprintf("%s:%s", PathParam, c.Param(PathParam))
+			} else {
+				param = c.Query(ipfilter.urlParam)
+			}
 			blocked := false
 			ip := c.ClientIP()
 			if !ipfilter.Allowed(ip) {
@@ -359,18 +370,53 @@ func (a *Awarent) IPFilter() gin.HandlerFunc {
 	}
 }
 
+type (
+	afn = func(ctx *gin.Context) func(string) string
+)
+
 //Sentinel awarent gin use middleware
 func (a *Awarent) Sentinel() gin.HandlerFunc {
-	param := a.rule.ResourceParam
-	endpoint := a.rule.IPFilterRules.URLPath
+	var (
+		endpoint string
+		extFn    func(*gin.Context) string
+		fn       func(ctx *gin.Context) (string, bool)
+		wrapFn   func(string) string
+	)
+	// 请求路径
+	endpoint = a.rule.IPFilterRules.URLPath
+
+	// 根据请求参数获取 rule
+	extFn = func(ctx *gin.Context) string {
+		return ctx.Query(a.rule.ResourceParam)
+	}
+
+	if strings.Contains(a.rule.IPFilterRules.URLParam, ":") {
+		// 获取路径中的请求参数
+		extFn = func(c *gin.Context) string {
+			return c.Request.URL.Path
+		}
+	}
+
+	fn = func(ctx *gin.Context) (uId string, block bool) {
+		wrapFn = ctx.Query
+		if strings.Contains(a.rule.IPFilterRules.URLParam, ":") {
+			wrapFn = ctx.Param
+		}
+		uId = wrapFn(a.rule.ResourceParam)
+		for _, dayRule := range a.rule.DayFlowRules {
+			if dayRule.Resource == uId && dayRule.Threshold <= 0 {
+				block = true
+			}
+		}
+		return
+	}
+
 	return SentinelMiddleware(
 		// speicify which url path working with sentinel
 		endpoint,
 		// customize resource extractor if required
 		// method_path by default
-		WithResourceExtractor(func(ctx *gin.Context) string {
-			return ctx.Query(param)
-		}),
+		WithResourceExtractor(extFn),
 		// customize block fallback if required
 		// abort with status 429 by default
 		WithBlockFallback(func(ctx *gin.Context) {
@@ -379,6 +425,12 @@ func (a *Awarent) Sentinel() gin.HandlerFunc {
 			// 	"err":  "too many request; the quota used up",
 			// 	"code": 10222,
 			// })
+		}),
+		WithDayBlockExtractor(fn),
+		WithEntrySummary(func(ctx *gin.Context, uId string) {
+			if batchCount, ok := ctx.Get("batchCount"); ok {
+				a.count.add(uId, batchCount.(int64))
+			}
 		}),
 	)
 }
