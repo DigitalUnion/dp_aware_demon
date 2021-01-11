@@ -12,16 +12,28 @@
 
 
 ### config.yaml
+
+⚠️ 如果有批量查询切批量查询被计算入日查询量限制中，需要业务添加如下代码
+```
+ num = 10 // num 记录本次批量查询换算成几次日查询量限制
+ c.Set("queries", num)
+```
 - 场景一（id 映射）
 ```yaml
 resource-param: cid # cid需要从url参数中获取的需要配置，cid在url路径中直接带的，⚠️不需要配置
 flow-control-rules:
   - resource: bigdata
-    threshold: 100
+    threshold: 100  # qps 限制
+    queriesPerDay: 10000 # 日查询量限制
+    queryBlock: false # 是否 block，默认 false
   - resource: test
     threshold: 50
+    queriesPerDay: 10000
+    queryBlock: false
   - resource: ads
     threshold: 1000
+    queriesPerDay: 10000
+    queryBlock: false
 ip-filter-rules:
   allowed:
     - 127.0.0.1
@@ -50,11 +62,17 @@ ip-filter-rules:
 resource-param:  # cid需要从url参数中获取的需要配置，cid在url路径中直接带的，⚠️不需要配置
 flow-control-rules:
   - resource: bigdata
-    threshold: 100
+    threshold: 100   # qps 限制
+    queriesPerDay: 10000 # 日查询量限制
+    queryBlock: false # 是否 block，默认配置 false
   - resource: test
     threshold: 50
+    queriesPerDay: 10000
+    queryBlock: false
   - resource: ads
     threshold: 1000
+    queriesPerDay: 10000
+    queryBlock: false
 ip-filter-rules:
   allowed:
     - 127.0.0.1

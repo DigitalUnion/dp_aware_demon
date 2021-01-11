@@ -78,8 +78,10 @@ type Awarent struct {
 
 //FlowControlOption option for flow control  resource for specify resource need to be controled, threshold, means every second passed request by flowcontrol. here means QPS
 type FlowControlOption struct {
-	Resource  string  `json:"resource"`
-	Threshold float64 `json:"threshold"`
+	Resource      string  `json:"resource"`
+	Threshold     float64 `json:"threshold"`
+	QueriesPerDay float64 `json:"queriesPerDay"`
+	QueryBlock    bool    `json:"queryBlock"`
 }
 
 //Rule struct for flowcontrol/ipfilter rule collection.
@@ -400,12 +402,16 @@ var customIpHandler gin.HandlerFunc = func(c *gin.Context) {
 	c.Next()
 }
 
-var endpoint, param string
+var endpoint, param, ruleId string
+var flowRule []FlowControlOption
 
 //Sentinel awarent gin use middleware
 func (a *Awarent) Sentinel() gin.HandlerFunc {
 	param = a.rule.ResourceParam
+	flowRule = a.rule.FlowControlRules
 	endpoint = a.rule.IPFilterRules.URLPath
+	ruleId = a.ruleID
+
 	if param == "" {
 		return defaultSentinelMiddleware
 	} else {
@@ -415,9 +421,20 @@ func (a *Awarent) Sentinel() gin.HandlerFunc {
 
 var defaultSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 	// speicify which url path working with sentinel
+	ruleId,
 	WithParamExtractor(
 		func(ctx *gin.Context) bool {
 			return !strings.HasPrefix(ctx.Request.URL.Path, endpoint)
+		}),
+	WithBlockExtractor(
+		func(ctx *gin.Context) bool {
+			cid := ctx.Query(param)
+			for _, rule := range flowRule {
+				if cid == rule.Resource {
+					return rule.QueryBlock
+				}
+			}
+			return false
 		}),
 	//endpoint,
 	// customize resource extractor if required
@@ -438,9 +455,25 @@ var defaultSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 
 var customSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 	// speicify which url path working with sentinel
+	ruleId,
 	WithParamExtractor(
 		func(ctx *gin.Context) bool {
 			return ctx.Request.URL.Path != endpoint
+		}),
+
+	WithBlockExtractor(
+		func(ctx *gin.Context) bool {
+			params := strings.Split(ctx.Request.URL.Path, "/")
+			var param string
+			if len(params) != 0 {
+				param = params[len(params)-1]
+			}
+			for _, rule := range flowRule {
+				if param == rule.Resource {
+					return rule.QueryBlock
+				}
+			}
+			return false
 		}),
 	//endpoint,
 	// customize resource extractor if required

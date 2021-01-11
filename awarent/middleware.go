@@ -17,6 +17,7 @@ type (
 	Option  func(*options)
 	options struct {
 		paramExtractor  func(*gin.Context) bool
+		blockExtractor  func(*gin.Context) bool
 		resourceExtract func(*gin.Context) string
 		blockFallback   func(*gin.Context)
 	}
@@ -34,6 +35,12 @@ func evaluateOptions(opts []Option) *options {
 func WithParamExtractor(fn func(*gin.Context) bool) Option {
 	return func(opts *options) {
 		opts.paramExtractor = fn
+	}
+}
+
+func WithBlockExtractor(fn func(*gin.Context) bool) Option {
+	return func(opts *options) {
+		opts.blockExtractor = fn
 	}
 }
 
@@ -55,7 +62,7 @@ func WithBlockFallback(fn func(ctx *gin.Context)) Option {
 // Default resource name is {method}:{path}, such as "GET:/api/users/:id"
 // Default block fallback is returning 429 code
 // Define your own behavior by setting options
-func SentinelMiddleware(opts ...Option) gin.HandlerFunc {
+func SentinelMiddleware(ruleId string, opts ...Option) gin.HandlerFunc {
 	options := evaluateOptions(opts)
 	return func(c *gin.Context) {
 
@@ -76,8 +83,12 @@ func SentinelMiddleware(opts ...Option) gin.HandlerFunc {
 			sentinel.WithResourceType(base.ResTypeWeb),
 			sentinel.WithTrafficType(base.Inbound),
 		)
+		var block bool
+		if options.blockExtractor != nil {
+			block = options.blockExtractor(c)
+		}
 
-		if err != nil {
+		if err != nil || block {
 			if options.blockFallback != nil {
 				options.blockFallback(c)
 			} else {
@@ -93,6 +104,13 @@ func SentinelMiddleware(opts ...Option) gin.HandlerFunc {
 		}
 		defer entry.Exit()
 		c.Next()
+		if options.resourceExtract != nil {
+			queries := interface{}(1)
+			if num, ok := c.Get("queries"); ok {
+				queries = num
+			}
+			SMap.add(ruleId, resourceName, queries)
+		}
 		status := fmt.Sprintf("%d", c.Writer.Status())
 		endpoint := c.Request.URL.Path
 		lvs := []string{status, endpoint, resourceName}
