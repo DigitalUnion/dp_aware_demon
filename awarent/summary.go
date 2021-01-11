@@ -59,5 +59,5 @@ func (s summaryMap) send(ruleId, cid string, queries int64) {
 	if err != nil {
 		return
 	}
-	s.client.Post("http://127.0.0.1:8181/q", "application/json", bytes.NewReader(reqBody))
+	s.client.Post("http://172.17.130.223:8181/q", "application/json", bytes.NewReader(reqBody))
 }
