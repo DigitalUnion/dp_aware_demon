@@ -412,7 +412,7 @@ func (a *Awarent) Sentinel() gin.HandlerFunc {
 	endpoint = a.rule.IPFilterRules.URLPath
 	ruleId = a.ruleID
 
-	if param == "" {
+	if param != "" {
 		return defaultSentinelMiddleware
 	} else {
 		return customSentinelMiddleware

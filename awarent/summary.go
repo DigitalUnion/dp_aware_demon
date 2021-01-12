@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	sendLimit = 1000
+	sendLimit = 10
 )
 
 var SMap *summaryMap
