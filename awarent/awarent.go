@@ -78,10 +78,10 @@ type Awarent struct {
 
 //FlowControlOption option for flow control  resource for specify resource need to be controled, threshold, means every second passed request by flowcontrol. here means QPS
 type FlowControlOption struct {
-	Resource      string  `json:"resource"`
-	Threshold     float64 `json:"threshold"`
-	QueriesPerDay float64 `json:"queriesPerDay"`
-	QueryBlock    bool    `json:"queryBlock"`
+	Resource      string  `yaml:"resource"`
+	Threshold     float64 `yaml:"threshold"`
+	QueriesPerDay float64 `yaml:"queriesPerDay"`
+	QueryBlock    bool    `yaml:"queryBlock"`
 }
 
 //Rule struct for flowcontrol/ipfilter rule collection.
@@ -402,95 +402,94 @@ var customIpHandler gin.HandlerFunc = func(c *gin.Context) {
 	c.Next()
 }
 
-var endpoint, param, ruleId string
-var flowRule []FlowControlOption
+var ruleId string
 
 //Sentinel awarent gin use middleware
 func (a *Awarent) Sentinel() gin.HandlerFunc {
-	param = a.rule.ResourceParam
-	flowRule = a.rule.FlowControlRules
-	endpoint = a.rule.IPFilterRules.URLPath
 	ruleId = a.ruleID
-
-	if param != "" {
-		return defaultSentinelMiddleware
+	if a.rule.ResourceParam != "" {
+		return a.defaultSentinelMiddleware()
 	} else {
-		return customSentinelMiddleware
+		return a.customSentinelMiddleware()
 	}
 }
 
-var defaultSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
-	// speicify which url path working with sentinel
-	WithParamExtractor(
-		func(ctx *gin.Context) bool {
-			return ctx.Request.URL.Path != endpoint
-		}),
-	WithBlockExtractor(
-		func(ctx *gin.Context) bool {
-			cid := ctx.Query(param)
-			for _, rule := range flowRule {
-				if cid == rule.Resource {
-					return rule.QueryBlock
+func (a *Awarent) defaultSentinelMiddleware() gin.HandlerFunc {
+	return SentinelMiddleware(
+		// speicify which url path working with sentinel
+		WithParamExtractor(
+			func(ctx *gin.Context) bool {
+				return ctx.Request.URL.Path != a.rule.IPFilterRules.URLPath
+			}),
+		WithBlockExtractor(
+			func(ctx *gin.Context) bool {
+				cid := ctx.Query(a.rule.ResourceParam)
+				for _, rule := range a.rule.FlowControlRules {
+					if cid == rule.Resource {
+						return rule.QueryBlock
+					}
 				}
-			}
-			return false
+				return false
+			}),
+		//endpoint,
+		// customize resource extractor if required
+		// method_path by default
+		WithResourceExtractor(func(ctx *gin.Context) string {
+			return ctx.Query(a.rule.ResourceParam)
 		}),
-	//endpoint,
-	// customize resource extractor if required
-	// method_path by default
-	WithResourceExtractor(func(ctx *gin.Context) string {
-		return ctx.Query(param)
-	}),
-	// customize block fallback if required
-	// abort with status 429 by default
-	WithBlockFallback(func(ctx *gin.Context) {
-		ctx.AbortWithStatus(http.StatusTooManyRequests)
-		// ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
-		// 	"err":  "too many request; the quota used up",
-		// 	"code": 10222,
-		// })
-	}),
-)
-
-var customSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
-	// speicify which url path working with sentinel
-	WithParamExtractor(
-		func(ctx *gin.Context) bool {
-			return !strings.HasPrefix(ctx.Request.URL.Path, endpoint)
+		// customize block fallback if required
+		// abort with status 429 by default
+		WithBlockFallback(func(ctx *gin.Context) {
+			ctx.AbortWithStatus(http.StatusTooManyRequests)
+			// ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
+			// 	"err":  "too many request; the quota used up",
+			// 	"code": 10222,
+			// })
 		}),
+	)
+}
 
-	WithBlockExtractor(
-		func(ctx *gin.Context) bool {
+func (a *Awarent) customSentinelMiddleware() gin.HandlerFunc {
+	return SentinelMiddleware(
+		// speicify which url path working with sentinel
+		WithParamExtractor(
+			func(ctx *gin.Context) bool {
+				return !strings.HasPrefix(ctx.Request.URL.Path, a.rule.IPFilterRules.URLPath)
+			}),
+
+		WithBlockExtractor(
+			func(ctx *gin.Context) bool {
+				params := strings.Split(ctx.Request.URL.Path, "/")
+				var param string
+				if len(params) != 0 {
+					param = params[len(params)-1]
+				}
+				for _, rule := range a.rule.FlowControlRules {
+					if param == rule.Resource {
+						return rule.QueryBlock
+					}
+				}
+				return false
+			}),
+		//endpoint,
+		// customize resource extractor if required
+		// method_path by default
+		WithResourceExtractor(func(ctx *gin.Context) string {
 			params := strings.Split(ctx.Request.URL.Path, "/")
 			var param string
 			if len(params) != 0 {
 				param = params[len(params)-1]
 			}
-			for _, rule := range flowRule {
-				if param == rule.Resource {
-					return rule.QueryBlock
-				}
-			}
-			return false
+			return param
 		}),
-	//endpoint,
-	// customize resource extractor if required
-	// method_path by default
-	WithResourceExtractor(func(ctx *gin.Context) string {
-		params := strings.Split(ctx.Request.URL.Path, "/")
-		var param string
-		if len(params) != 0 {
-			param = params[len(params)-1]
-		}
-		return param
-	}),
-	// customize block fallback if required
-	// abort with status 429 by default
-	WithBlockFallback(func(ctx *gin.Context) {
-		ctx.AbortWithStatus(http.StatusTooManyRequests)
-		// ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
-		// 	"err":  "too many request; the quota used up",
-		// 	"code": 10222,
-		// })
-	}),
-)
+		// customize block fallback if required
+		// abort with status 429 by default
+		WithBlockFallback(func(ctx *gin.Context) {
+			ctx.AbortWithStatus(http.StatusTooManyRequests)
+			// ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]interface{}{
+			// 	"err":  "too many request; the quota used up",
+			// 	"code": 10222,
+			// })
+		}),
+	)
+}
