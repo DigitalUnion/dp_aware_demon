@@ -424,7 +424,7 @@ var defaultSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 	ruleId,
 	WithParamExtractor(
 		func(ctx *gin.Context) bool {
-			return !strings.HasPrefix(ctx.Request.URL.Path, endpoint)
+			return ctx.Request.URL.Path != endpoint
 		}),
 	WithBlockExtractor(
 		func(ctx *gin.Context) bool {
@@ -458,7 +458,7 @@ var customSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 	ruleId,
 	WithParamExtractor(
 		func(ctx *gin.Context) bool {
-			return ctx.Request.URL.Path != endpoint
+			return !strings.HasPrefix(ctx.Request.URL.Path, endpoint)
 		}),
 
 	WithBlockExtractor(
