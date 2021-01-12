@@ -48,8 +48,9 @@ func (s summaryMap) add(ruleId, cid string, queries interface{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.sMap[cid] += value
-	if s.sMap[cid] >= sendLimit {
-		go s.send(ruleId, cid, value)
+	v := s.sMap[cid]
+	if v >= sendLimit {
+		go s.send(ruleId, cid, v)
 		s.sMap[cid] = 0
 	}
 }
