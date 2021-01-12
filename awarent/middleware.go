@@ -62,7 +62,7 @@ func WithBlockFallback(fn func(ctx *gin.Context)) Option {
 // Default resource name is {method}:{path}, such as "GET:/api/users/:id"
 // Default block fallback is returning 429 code
 // Define your own behavior by setting options
-func SentinelMiddleware(ruleId string, opts ...Option) gin.HandlerFunc {
+func SentinelMiddleware(opts ...Option) gin.HandlerFunc {
 	options := evaluateOptions(opts)
 	return func(c *gin.Context) {
 

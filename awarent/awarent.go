@@ -421,7 +421,6 @@ func (a *Awarent) Sentinel() gin.HandlerFunc {
 
 var defaultSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 	// speicify which url path working with sentinel
-	ruleId,
 	WithParamExtractor(
 		func(ctx *gin.Context) bool {
 			return ctx.Request.URL.Path != endpoint
@@ -455,7 +454,6 @@ var defaultSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 
 var customSentinelMiddleware gin.HandlerFunc = SentinelMiddleware(
 	// speicify which url path working with sentinel
-	ruleId,
 	WithParamExtractor(
 		func(ctx *gin.Context) bool {
 			return !strings.HasPrefix(ctx.Request.URL.Path, endpoint)
