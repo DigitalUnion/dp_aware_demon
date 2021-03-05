@@ -196,6 +196,7 @@ func (a *Awarent) Register() (bool, error) {
 		Weight:      10,
 		Healthy:     true,
 		Enable:      true,
+		Ephemeral:   true,
 		GroupName:   a.group,
 	}
 
